@@ -35,7 +35,7 @@ class ExperimentRunner:
     config:
         Experiment configuration dict (paths, hyperparameters, seeds, …).
     dataset:
-        A ``TweetMentionDatasetBase`` instance.
+        A ``TweetMentionDataset`` instance.
     task:
         A ``UserMentionTaskBase`` instance.
     db_full:

@@ -1,5 +1,5 @@
 from baseline_evaluator import BaselineEvaluator
-from dataset import TweetMentionDatasetBase
+from dataset import TweetMentionDataset
 from logging_utils import setup_logging
 from model import Model
 from runner import ExperimentRunner, METRIC_NAMES
@@ -11,7 +11,7 @@ __all__ = [
     "ExperimentRunner",
     "METRIC_NAMES",
     "Model",
-    "TweetMentionDatasetBase",
+    "TweetMentionDataset",
     "Trainer",
     "UserMentionTaskBase",
     "setup_logging",

@@ -36,6 +36,7 @@ class Trainer:
             batch_size = batch[entity_table].batch_size
 
             out = self.model.forward_dst_readout(batch, entity_table, dst_table)
+            out = out.squeeze(-1)
 
             input_id = batch[entity_table].input_id.cpu()
             src_batch, dst_index = train_sparse_tensor[input_id]
@@ -73,6 +74,7 @@ class Trainer:
             batch_size = batch[entity_table].batch_size
 
             out = self.model.forward_dst_readout(batch, entity_table, dst_table)
+            out = out.squeeze(-1)
 
             scores = torch.zeros(batch_size, num_dst_nodes, device=out.device)
             scores[batch[dst_table].batch, batch[dst_table].n_id] = torch.sigmoid(out)
