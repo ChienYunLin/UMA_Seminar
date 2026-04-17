@@ -73,8 +73,7 @@ class Model(torch.nn.Module):
         self.head.reset_parameters()
         for embedding in self.embedding_dict.values():
             torch.nn.init.normal_(embedding.weight, std=0.1)
-        if self.id_awareness_emb is not None:
-            self.id_awareness_emb.reset_parameters()
+        self.id_awareness_emb.reset_parameters()
 
     def forward_dst_readout(
         self, batch: HeteroData, entity_table: NodeType, dst_table: NodeType
