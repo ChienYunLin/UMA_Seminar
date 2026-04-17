@@ -35,6 +35,8 @@ class TweetMentionDatasetBase(Dataset):
         users = pd.read_parquet(os.path.join(self.data_dir, self.users_table_name))
         tweets = pd.read_parquet(os.path.join(self.data_dir, self.tweets_table_name))
         mention_rel = pd.read_parquet(os.path.join(self.data_dir, self.mentions_table_name))
+        replies = pd.read_parquet(os.path.join(self.data_dir, "replies_2019.parquet"))
+        reply_mention_rel = pd.read_parquet(os.path.join(self.data_dir, "reply_mention_rel.parquet"))
 
         # Preprocess data
         users["verified"] = users["verified"].astype(int)
@@ -43,7 +45,7 @@ class TweetMentionDatasetBase(Dataset):
         for col in [c for c in tweets.columns if c.startswith("emotion_")]:
             tweets[col] = tweets[col].astype(int)
 
-        return {"users": users, "tweets": tweets, "mention_rel": mention_rel}
+        return {"users": users, "tweets": tweets, "mention_rel": mention_rel, "replies": replies, "reply_mention_rel": reply_mention_rel}
 
     def _build_core_relbench_tables(self, raw: Dict[str, pd.DataFrame]) -> Dict[str, Table]:
         """Convert raw DataFrames to RelBench Table objects for the core tables."""
@@ -66,6 +68,18 @@ class TweetMentionDatasetBase(Dataset):
                 pkey_col="mention_idx",
                 time_col="created_at",
             ),
+            "replies": Table(
+                df=pd.DataFrame(raw["replies"]),
+                fkey_col_to_pkey_table={"tweet_idx": "tweets"},
+                pkey_col="reply_idx",
+                time_col="created_at",
+            ),
+            "reply_mention_rel": Table(
+                df=pd.DataFrame(raw["reply_mention_rel"]),
+                fkey_col_to_pkey_table={"reply_idx": "replies", "user_idx": "users"},
+                pkey_col="idx",
+                time_col="created_at",
+            )
         }
 
     def make_db(self) -> Database:
