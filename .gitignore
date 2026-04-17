@@ -144,12 +144,6 @@ model/
 docs/
 
 #others
-archive_data/
-clustering/
 data/
-polarization analysis/
 results/
-results_not_permutated/
-results_permutated/
-results_two_tower/
-unused_scripts/
+cache/
