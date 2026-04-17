@@ -7,14 +7,16 @@ Run:
     python run_baselines.py
 """
 
+import sys, os
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+src_path = os.path.join(script_dir, "..", "src")
+sys.path.insert(0, os.path.normpath(src_path))
+
 import json
 import shutil
-
 import numpy as np
 import pandas as pd
-
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from baseline_evaluator import BaselineEvaluator
 from dataset import TweetMentionDatasetBase
@@ -72,6 +74,8 @@ class BaselineRunner:
             shutil.rmtree(task.cache_dir, ignore_errors=True)
         task.cache_dir = None
 
+        self.val_timestamp = dataset.val_timestamp
+        self.test_timestamp = dataset.test_timestamp
         self.task = task
         self.db_full = dataset.get_db(upto_test_timestamp=False)
 
@@ -95,8 +99,8 @@ class BaselineRunner:
         logger.info("Baseline: Global Popularity")
         logger.info("=" * 60)
 
-        val_pop_pred  = evaluator.global_popularity(self.val_table)
-        test_pop_pred = evaluator.global_popularity(self.test_table)
+        val_pop_pred  = evaluator.global_popularity(self.val_table, self.val_timestamp)
+        test_pop_pred = evaluator.global_popularity(self.test_table, self.test_timestamp)
 
         val_pop_metrics  = task.evaluate(val_pop_pred,  self.val_table)
         test_pop_metrics = task.evaluate(test_pop_pred, self.test_table)
@@ -117,8 +121,8 @@ class BaselineRunner:
         logger.info("Baseline: Past Visit")
         logger.info("=" * 60)
 
-        val_pv_pred  = evaluator.past_visit(self.val_table,  logger)
-        test_pv_pred = evaluator.past_visit(self.test_table, logger)
+        val_pv_pred  = evaluator.past_visit(self.val_table,  self.val_timestamp)
+        test_pv_pred = evaluator.past_visit(self.test_table, self.test_timestamp)
 
         val_pv_metrics  = task.evaluate(val_pv_pred,  self.val_table)
         test_pv_metrics = task.evaluate(test_pv_pred, self.test_table)
