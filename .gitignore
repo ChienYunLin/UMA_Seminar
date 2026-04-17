@@ -1,0 +1,155 @@
+# -----------------------------
+# LaTeX build files
+# -----------------------------
+*.aux
+*.bbl
+*.blg
+*.brf
+*.idx
+*.ilg
+*.ind
+*.lof
+*.log
+*.lot
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+*.xdv
+
+# -----------------------------
+# Temporary / backup files
+# -----------------------------
+*.bak
+*.backup
+*~
+*.tmp
+*.sav
+*.swp
+*.DS_Store
+Thumbs.db
+
+# -----------------------------
+# Output files (keep only .pdf)
+# -----------------------------
+!*.pdf   # 允許 pdf
+!*.tex   # 允許 tex
+*.dvi
+*.ps
+
+# -----------------------------
+# Editor / build folders
+# -----------------------------
+build/
+out/
+latex.out/
+*.synctex(busy)
+
+# -----------------------------
+# Overleaf / VSCode / Texstudio
+# -----------------------------
+*.acn
+*.acr
+*.alg
+*.glg
+*.glo
+*.gls
+*.ist
+.vscode/
+.idea/
+*.run.xml
+*.bcf
+*.xml
+
+# -----------------------------
+# macOS
+# -----------------------------
+.DS_Store
+
+# ===== Python common =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+*.log
+*.sqlite3
+*.db
+
+# ===== Jupyter Notebooks =====
+.ipynb_checkpoints/
+.notebooks_cache/
+*.nbconvert.ipynb
+*.checkpoint.ipynb
+
+# ===== Environment / Secrets =====
+.env
+.env.*
+*.env
+secrets.json
+config.ini
+*.pem
+*.key
+
+# ===== Virtual environments =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== Docker build artifacts =====
+*.pid
+*.tar
+*.bak
+*.tmp
+*.log
+.dockerignore
+build/
+dist/
+tmp/
+.cache/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+*.lock
+
+# ===== Neo4j data / logs (mounted volumes) =====
+neo4j_data/
+neo4j_logs/
+import/
+plugins/
+
+# ===== System / Editor files =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.csv
+annotations/
+*.xlsx
+intermediate/
+model/
+
+#docs
+docs/
+
+#others
+archive_data/
+clustering/
+data/
+polarization analysis/
+results/
+results_not_permutated/
+results_permutated/
+results_two_tower/
+unused_scripts/
