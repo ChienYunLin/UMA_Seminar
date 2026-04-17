@@ -13,8 +13,7 @@ from torch_geometric.seed import seed_everything
 from relbench.modeling.graph import get_link_train_table_input, make_pkey_fkey_graph
 from relbench.modeling.loader import SparseTensor
 
-from analysis.across_community_analysis import cross_deg_f
-from dataset import TweetMentionDatasetBase
+from dataset import TweetMentionDataset
 from logging_utils import setup_logging
 from model import Model
 from task import UserMentionTaskBase
@@ -50,7 +49,7 @@ class ExperimentRunner:
     def __init__(
         self,
         config: Dict,
-        dataset: TweetMentionDatasetBase,
+        dataset: TweetMentionDataset,
         task: UserMentionTaskBase,
         db_full,
         col_to_stype_dict: Dict,
