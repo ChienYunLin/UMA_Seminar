@@ -17,7 +17,7 @@ import shutil
 import pandas as pd
 from torch_frame import stype
 
-from dataset import TweetMentionDatasetBase
+from dataset import TweetMentionDataset
 from runner import ExperimentRunner
 from task import UserMentionTaskBase
 
@@ -54,13 +54,6 @@ CONFIG = {
     "num_runs": 5,
     "seeds": [42, 123, 456, 789, 1024],
 }
-
-
-class TweetMentionDataset(TweetMentionDatasetBase):
-    def make_db(self) -> Database:
-        raw = self._load_core_tables()
-        tables = self._build_core_relbench_tables(raw)
-        return Database(tables)
 
 
 class UserMentionTask(UserMentionTaskBase):

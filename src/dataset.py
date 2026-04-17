@@ -6,7 +6,7 @@ import pandas as pd
 from relbench.base import Database, Dataset, Table
 
 
-class TweetMentionDatasetBase(Dataset):
+class TweetMentionDataset(Dataset):
     """Base dataset that loads core tweet/user/mention tables.
 
     Subclasses override ``make_db`` to add extra tables (e.g. replies).

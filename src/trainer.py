@@ -8,8 +8,8 @@ from tqdm import tqdm
 
 from relbench.modeling.loader import SparseTensor
 
-from logging_utils import setup_logging
 from model import Model
+import logging
 
 
 class Trainer:
@@ -18,7 +18,7 @@ class Trainer:
     def __init__(self, model: Model, device: torch.device, output_dir: str):
         self.model = model
         self.device = device
-        self.logger = setup_logging(output_dir)
+        self.logger = logging.getLogger("mention_link_pred")
 
     def train_epoch(
         self,
