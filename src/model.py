@@ -9,6 +9,8 @@ from torch_geometric.nn import MLP
 from torch_geometric.typing import NodeType
 
 from relbench.modeling.nn import HeteroEncoder, HeteroGraphSAGE, HeteroTemporalEncoder
+from atomic_routes import get_atomic_routes
+from relgnn_nn import RelGNN
 
 
 class Model(torch.nn.Module):
@@ -21,8 +23,8 @@ class Model(torch.nn.Module):
         out_channels: int,
         aggr: str,
         norm: str,
-        shallow_list: List[NodeType] = None,
-        id_awareness: bool = False,
+        is_relgnn: bool,
+        shallow_list: List[NodeType] = [],
     ):
         super().__init__()
 
@@ -38,18 +40,30 @@ class Model(torch.nn.Module):
             node_types=[nt for nt in data.node_types if "time" in data[nt]],
             channels=channels,
         )
-        self.gnn = HeteroGraphSAGE(
-            node_types=data.node_types,
-            edge_types=data.edge_types,
-            channels=channels,
-            aggr=aggr,
-            num_layers=num_layers,
-        )
+
+        if is_relgnn:
+            atomic_routes_list = get_atomic_routes(data.edge_types)
+            self.gnn = RelGNN(
+                node_types=data.node_types,
+                edge_types=atomic_routes_list,
+                channels=channels,
+                aggr=aggr,
+                num_model_layers=num_layers,
+                num_heads=1,  # Number of prediction heads
+            )
+        else:
+            self.gnn = HeteroGraphSAGE(
+                node_types=data.node_types,
+                edge_types=data.edge_types,
+                channels=channels,
+                aggr=aggr,
+                num_layers=num_layers,
+            )
         self.head = MLP(channels, out_channels=out_channels, norm=norm, num_layers=1)
         self.embedding_dict = ModuleDict(
             {node: Embedding(data.num_nodes_dict[node], channels) for node in shallow_list}
         )
-        self.id_awareness_emb = torch.nn.Embedding(1, channels) if id_awareness else None
+        self.id_awareness_emb = torch.nn.Embedding(1, channels)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -62,45 +76,28 @@ class Model(torch.nn.Module):
         if self.id_awareness_emb is not None:
             self.id_awareness_emb.reset_parameters()
 
-    def _encode(
-        self,
-        batch: HeteroData,
-        entity_table: NodeType,
-        batch_size: int,
-        apply_id_awareness: bool = False,
-    ) -> Tuple[Dict, Tensor]:
-        """Shared encode path: encoder -> temporal -> [id_awareness] -> shallow embeddings.
-        Returns (x_dict, seed_time).
-        """
-        x_dict = self.encoder(batch.tf_dict)
-        seed_time = batch[entity_table].seed_time
-
-        rel_time_dict = self.temporal_encoder(seed_time, batch.time_dict, batch.batch_dict)
-        for node_type, rel_time in rel_time_dict.items():
-            x_dict[node_type] = x_dict[node_type] + rel_time
-
-        if apply_id_awareness:
-            x_dict[entity_table][:batch_size] += self.id_awareness_emb.weight
-
-        for node_type, embedding in self.embedding_dict.items():
-            x_dict[node_type] = x_dict[node_type] + embedding(batch[node_type].n_id)
-        return x_dict, seed_time
-
-
-    def embed(self, batch: HeteroData, entity_table: NodeType) -> Tensor:
-        """GNN embeddings for seed nodes (with id_awareness, no head).
-        Used for embedding extraction after training.
-        """
-        batch_size = batch[entity_table].batch_size
-        x_dict, _ = self._encode(batch, entity_table, batch_size, apply_id_awareness=True)
-        x_dict = self.gnn(x_dict, batch.edge_index_dict)
-        return x_dict[entity_table][:batch_size]
-
     def forward_dst_readout(
         self, batch: HeteroData, entity_table: NodeType, dst_table: NodeType
     ) -> Tensor:
         """Score all dst nodes in the subgraph (with id_awareness on src seeds)."""
-        batch_size = batch[entity_table].batch_size
-        x_dict, _ = self._encode(batch, entity_table, batch_size, apply_id_awareness=True)
-        x_dict = self.gnn(x_dict, batch.edge_index_dict)
-        return self.head(x_dict[dst_table]).flatten()
+        seed_time = batch[entity_table].seed_time
+        x_dict = self.encoder(batch.tf_dict)
+        # Add ID-awareness to the root node
+        x_dict[entity_table][: seed_time.size(0)] += self.id_awareness_emb.weight
+
+        rel_time_dict = self.temporal_encoder(
+            seed_time, batch.time_dict, batch.batch_dict
+        )
+
+        for node_type, rel_time in rel_time_dict.items():
+            x_dict[node_type] = x_dict[node_type] + rel_time
+
+        for node_type, embedding in self.embedding_dict.items():
+            x_dict[node_type] = x_dict[node_type] + embedding(batch[node_type].n_id)
+
+        x_dict = self.gnn(
+            x_dict,
+            batch.edge_index_dict,
+        )
+
+        return self.head(x_dict[dst_table])

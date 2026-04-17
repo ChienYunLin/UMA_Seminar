@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from relbench.modeling.loader import SparseTensor
 
-from UMA_TP_ClimateWeb.Link_Prediction.src import setup_logging
+from logging_utils import setup_logging
 from model import Model
 
 
@@ -78,7 +78,7 @@ class Trainer:
             scores[batch[dst_table].batch, batch[dst_table].n_id] = torch.sigmoid(out)
 
             if not pred_list:
-                logger.info(
+                self.logger.info(
                     f"  Users scored per sample: "
                     f"{(scores > 0).sum(dim=1).float().mean():.0f} / {num_dst_nodes}"
                 )
@@ -87,22 +87,3 @@ class Trainer:
             pred_list.append(pred_mini)
 
         return torch.cat(pred_list, dim=0).cpu().numpy()
-
-    @torch.no_grad()
-    def extract_embeddings(
-        self, loader: NeighborLoader, node_type: str
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Extract GNN embeddings for a given node type."""
-        self.model.eval()
-        embs, node_ids = [], []
-
-        for batch in tqdm(loader, desc=f"Extracting {node_type} embeddings", leave=False):
-            batch = batch.to(self.device)
-            batch_size = batch[node_type].batch_size
-
-            emb = self.model.embed(batch, node_type)
-
-            embs.append(emb.cpu())
-            node_ids.append(batch[node_type].n_id[:batch_size].cpu())
-
-        return torch.cat(embs).numpy(), torch.cat(node_ids).numpy()

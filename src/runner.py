@@ -13,6 +13,7 @@ from torch_geometric.seed import seed_everything
 from relbench.modeling.graph import get_link_train_table_input, make_pkey_fkey_graph
 from relbench.modeling.loader import SparseTensor
 
+from analysis.across_community_analysis import cross_deg_f
 from dataset import TweetMentionDatasetBase
 from logging_utils import setup_logging
 from model import Model
@@ -128,7 +129,7 @@ class ExperimentRunner:
                 out_channels=cfg["out_channels"],
                 aggr=cfg["aggr"],
                 norm=cfg["norm"],
-                id_awareness=True,
+                is_relgnn=cfg["is_relgnn"],
             ).to(self.device)
 
             trainer = Trainer(model, self.device, self.output_dir)
@@ -159,9 +160,6 @@ class ExperimentRunner:
         with open(results_path, "w") as f:
             json.dump(final_results, f, indent=2, default=str)
         logger.info(f"\nResults saved to {results_path}")
-
-        # ── Embeddings ────────────────────────────────────────────────
-        self._extract_and_save_embeddings(model, all_run_results, loader_dict, data, db_full)
 
         logger.info("=" * 70)
         logger.info("Experiment complete!")
@@ -316,94 +314,3 @@ class ExperimentRunner:
                         f"  GNN ({model_type}) {split:5s} | {metric}: {mean:.6f} ± {std:.6f}"
                     )
         return summary
-
-    def _extract_and_save_embeddings(self, model, all_run_results, loader_dict, data, db_full):
-        cfg = self.config
-        logger = self.logger
-        logger.info("\nExtracting embeddings from best run...")
-
-        best_run_idx = min(
-            range(len(all_run_results)),
-            key=lambda i: all_run_results[i]["final_train_loss"],
-        )
-        best_run_dir = os.path.join(self.output_dir, f"run_{best_run_idx + 1}")
-        logger.info(f"Best run (lowest train loss): {best_run_idx + 1}")
-
-        model.load_state_dict(
-            torch.load(
-                os.path.join(best_run_dir, "last_epoch_model.pt"),
-                map_location=self.device,
-                weights_only=True,
-            )
-        )
-        trainer = Trainer(model, self.device, self.output_dir)
-
-        # User embeddings (deduplicated across splits)
-        all_user_embs, all_user_ids = [], []
-        for split in ["train", "val", "test"]:
-            logger.info(f"Extracting user embeddings from {split} loader...")
-            emb, ids = trainer.extract_embeddings(loader_dict[split], "users")
-            all_user_embs.append(emb)
-            all_user_ids.append(ids)
-            logger.info(f"  {split} user embeddings: {emb.shape}")
-
-        all_ids_cat  = np.concatenate(all_user_ids)
-        all_embs_cat = np.concatenate(all_user_embs)
-        unique_ids, unique_idx = np.unique(all_ids_cat, return_index=True)
-        user_emb = all_embs_cat[unique_idx]
-
-        np.save(os.path.join(self.output_dir, "user_embeddings.npy"), user_emb)
-        np.save(os.path.join(self.output_dir, "user_ids.npy"), unique_ids)
-        logger.info(f"Total unique user embeddings: {user_emb.shape}")
-
-        # Tweet embeddings
-        logger.info("Extracting tweet embeddings...")
-        tweet_loader = NeighborLoader(
-            data,
-            num_neighbors=cfg["num_neighbors"],
-            time_attr="time",
-            input_nodes="tweets",
-            input_time=torch.zeros(data.num_nodes_dict["tweets"], dtype=torch.long),
-            subgraph_type="bidirectional",
-            batch_size=cfg["batch_size"],
-            temporal_strategy=cfg["temporal_strategy"],
-            shuffle=False,
-            num_workers=0,
-            persistent_workers=False,
-        )
-
-        # Cast all node/edge indices to long (after loader init, matching original order)
-        for node_type in data.node_types:
-            if hasattr(data[node_type], "node_id"):
-                data[node_type].node_id = data[node_type].node_id.long()
-        for edge_type in data.edge_types:
-            if hasattr(data[edge_type], "edge_index"):
-                data[edge_type].edge_index = data[edge_type].edge_index.long()
-            if hasattr(data[edge_type], "edge_label_index"):
-                data[edge_type].edge_label_index = data[edge_type].edge_label_index.long()
-
-        tweet_emb, tweet_ids = trainer.extract_embeddings(tweet_loader, "tweets")
-        np.save(os.path.join(self.output_dir, "tweet_embeddings.npy"), tweet_emb)
-        np.save(os.path.join(self.output_dir, "tweet_ids.npy"), tweet_ids)
-        logger.info(f"Tweet embeddings: {tweet_emb.shape}")
-
-        # Metadata
-        tweets_df = db_full.table_dict["tweets"].df
-        users_df  = db_full.table_dict["users"].df
-
-        tweet_meta_cols = [c for c in tweets_df.columns if c in [
-            "tweet_idx", "user_idx", "conversation_id", "created_at", "sentiment",
-            "dominant_emotion", "topic", "theme", "rhetorical_style",
-            "label_type", "label_consequences", "topic_category",
-        ]]
-        tweets_df[tweet_meta_cols].to_parquet(
-            os.path.join(self.output_dir, "tweet_metadata.parquet")
-        )
-
-        user_meta_cols = [c for c in users_df.columns if c in [
-            "user_idx", "username", "actor_type", "verified",
-        ]]
-        users_df[user_meta_cols].to_parquet(
-            os.path.join(self.output_dir, "user_metadata.parquet")
-        )
-        logger.info(f"Metadata saved to {self.output_dir}/")
