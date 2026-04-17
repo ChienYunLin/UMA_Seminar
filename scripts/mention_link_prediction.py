@@ -7,13 +7,15 @@ Unique to this variant:
 - Extra tables: replies, reply_mention_rel
 """
 
-import shutil
+import sys, os
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+src_path = os.path.join(script_dir, "..", "src")
+sys.path.insert(0, os.path.normpath(src_path))
+
+import shutil
 import pandas as pd
 from torch_frame import stype
-
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from dataset import TweetMentionDatasetBase
 from runner import ExperimentRunner
@@ -33,6 +35,8 @@ CONFIG = {
     "output_dir": "./results/user_mention_link_prediction_with_reply",
     "cache_dir": "./cache/user_mention_with_reply",
     "graph_cache_dir": "./user_mention_with_reply_materialized_cache",
+    # ====rel-gnn or not===
+    "is_relgnn": False,
     # ====hyper-parameters====
     "lr": 0.001,
     "epochs": 20,
@@ -52,30 +56,10 @@ CONFIG = {
 }
 
 
-class TweetMentionWithReplyDataset(TweetMentionDatasetBase):
+class TweetMentionDataset(TweetMentionDatasetBase):
     def make_db(self) -> Database:
         raw = self._load_core_tables()
         tables = self._build_core_relbench_tables(raw)
-
-        replies = pd.read_parquet(
-            os.path.join(self.data_dir, "replies_2019.parquet")
-        )
-        reply_mention_rel = pd.read_parquet(
-            os.path.join(self.data_dir, "reply_mention_rel.parquet")
-        )
-
-        tables["replies"] = Table(
-            df=pd.DataFrame(replies),
-            fkey_col_to_pkey_table={"tweet_idx": "tweets"},
-            pkey_col="reply_idx",
-            time_col="created_at",
-        )
-        tables["reply_mention_rel"] = Table(
-            df=pd.DataFrame(reply_mention_rel),
-            fkey_col_to_pkey_table={"reply_idx": "replies", "user_idx": "users"},
-            pkey_col="idx",
-            time_col="created_at",
-        )
         return Database(tables)
 
 
@@ -115,7 +99,7 @@ def main():
     shutil.rmtree(CONFIG["cache_dir"], ignore_errors=True)
     shutil.rmtree(CONFIG["graph_cache_dir"], ignore_errors=True)
 
-    dataset = TweetMentionWithReplyDataset(
+    dataset = TweetMentionDataset(
         data_dir=CONFIG["data_dir"],
         cache_dir=CONFIG["cache_dir"],
         users_table_name=CONFIG["users_table_name"],
