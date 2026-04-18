@@ -24,6 +24,7 @@ class Model(torch.nn.Module):
         aggr: str,
         norm: str,
         is_relgnn: bool,
+        num_heads: int,
         shallow_list: List[NodeType] = [],
     ):
         super().__init__()
@@ -49,7 +50,7 @@ class Model(torch.nn.Module):
                 channels=channels,
                 aggr=aggr,
                 num_model_layers=num_layers,
-                num_heads=1,  # Number of prediction heads
+                num_heads=num_heads,  # Number of prediction heads
             )
         else:
             self.gnn = HeteroGraphSAGE(

@@ -129,6 +129,7 @@ class ExperimentRunner:
                 aggr=cfg["aggr"],
                 norm=cfg["norm"],
                 is_relgnn=cfg["is_relgnn"],
+                num_heads=cfg["num_heads"],
             ).to(self.device)
 
             trainer = Trainer(model, self.device, self.output_dir)
