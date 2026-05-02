@@ -132,7 +132,7 @@ The runner reports both the **last-epoch** model and the model that achieved the
    - **dim-fact-dim** routes whenever a fact table (`f2p_*` edges) connects two dimensions through a shared key.
 4. `RelGNN_HeteroConv` dispatches each route to a `RelGNNConv`, which uses `TransformerConv` for attention and `SAGEConv` to aggregate the fact-side representation in the dim-fact-dim case.
 
-## Citation
+## Citations
 
 FEY, Matthias, et al. Relational deep learning: Graph representation learning on relational databases. arXiv preprint arXiv:2312.04615, 2023.
 
