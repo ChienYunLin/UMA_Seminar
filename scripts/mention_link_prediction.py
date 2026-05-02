@@ -1,10 +1,5 @@
 """
-User-to-User Mention Link Prediction (with reply nodes)
-========================================================
-Unique to this variant:
-- output_dir: results/user_mention_link_prediction_with_reply_2019
-- num_layers = 4
-- Extra tables: replies, reply_mention_rel
+User-to-User Mention Link Prediction
 """
 
 import sys, os
@@ -32,11 +27,12 @@ CONFIG = {
     "tweets_table_name": "tweets_2019.parquet",
     "mentions_table_name" : "mention_rel.parquet",
     # ====output data====
-    "output_dir": "./results/user_mention_link_prediction_with_reply",
+    "output_dir": "./results/user_mention_link_prediction_relgnn_1head",
     "cache_dir": "./cache/user_mention_with_reply",
     "graph_cache_dir": "./user_mention_with_reply_materialized_cache",
     # ====rel-gnn or not===
-    "is_relgnn": False,
+    "is_relgnn": True,
+    "num_heads": 1,  # Number of prediction heads, default 1
     # ====hyper-parameters====
     "lr": 0.001,
     "epochs": 20,
@@ -113,7 +109,7 @@ def main():
         task=task,
         db_full=db_full,
         col_to_stype_dict=col_to_stype_dict,
-        experiment_title="User-to-User Mention Link Prediction Experiment With Reply Node",
+        experiment_title="User-to-User Mention Link Prediction Experiment RelGNN with 1 Prediction Head",
     ).run()
 
 
