@@ -1,62 +1,68 @@
-# User Mention Link Prediction on Climate Twitter (2019)
+# User Mention Link Prediction with Relational GNNs
 
-A temporal graph neural network pipeline for predicting **user-to-user mention links** on a 2019 climate-focused Twitter dataset, built on top of [RelBench](https://relbench.stanford.edu/) and PyTorch Geometric. The project compares a HeteroGraphSAGE model against popularity and past-visit baselines, and includes analyses of community structure, mention behavior, and permutation tests.
+Predicting which users a Twitter user will mention next, framed as a temporal link prediction task on a heterogeneous relational graph. Built on top of [RelBench](https://relbench.stanford.edu/) and [PyTorch Geometric](https://pyg.org/), with a [RelGNN](https://arxiv.org/abs/2502.19406)-style attention architecture and heuristic baselines for comparison.
 
-## Task
+## Overview
 
-Given a source user and a timestamp, predict the top-*k* users they will mention in the next 30 days. Evaluation uses Precision@10, Recall@10, and MAP@10.
+Given a snapshot of tweets, users, mentions, and replies up to time *t*, the task is: for each source user, predict the top-*10* users they will mention in the next 30 days. The graph is constructed automatically from primary-key/foreign-key relationships via RelBench, and the model learns over heterogeneous node types (`users`, `tweets`, `mention_rel`, `replies` and `reply_mention_rel`).
 
-Two model variants are supported:
+Two model families are supported:
 
-| Variant | Script | Graph |
-|---|---|---|
-| User-Mention | `scripts/mention_link_prediction.py` | same core tables, 3 layers |
-| User-Mention + Reply | `scripts/mention_link_prediction_with_reply.py` | adds `replies` and `reply_mention_rel` tables, 4 layers |
+- **RelGNN** — heterogeneous graph attention with *dim-dim* and *dim-fact-dim* atomic routes derived from the schema (see `atomic_routes.py`, `relgnn_conv.py`, `relgnn_nn.py`).
+- **HeteroGraphSAGE** — standard baseline from `relbench.modeling.nn`, toggled via `is_relgnn: False` in the config.
 
-## Repository structure
+Two non-learned baselines are included for sanity-checking:
+
+- **Global Popularity** — predict the most-mentioned users overall (up to the cutoff).
+- **Past Visit** — predict the users this source user has mentioned most often in the past, padded with global popularity.
+
+## Repository layout
 
 ```
 .
-├── src/                                  # Core pipeline modules
-│   ├── dataset.py                        # TweetMentionDatasetBase (RelBench Dataset)
-│   ├── task.py                           # UserMentionTaskBase (link prediction task)
-│   ├── model.py                          # HeteroGraphSAGE + temporal + shallow embeddings
-│   ├── trainer.py                        # Train / eval / embedding extraction loop
-│   ├── runner.py                         # Multi-seed ExperimentRunner
-│   ├── baseline_evaluator.py             # Global-popularity & past-visit baselines
-│   ├── logging_utils.py                  # File + stdout logger
-│   ├── config.py                         # Shared paths & split timestamps
+├── src/                                       # Core pipeline modules
+│   ├── dataset.py                             # TweetMentionDatasetBase (RelBench Dataset)
+│   ├── task.py                                # UserMentionTaskBase (link prediction task)
+│   ├── model.py                               # Encoder + temporal encoder + RelGNN/SAGE + MLP head
+│   ├── relgnn_nn.py                           # RelGNN stack (multi-layer hetero conv + LayerNorm)
+│   ├── relgnn_hetero_conv.py                  # Hetero wrapper, dispatches per atomic-route type
+│   ├── relgnn_conv.py                         # Single-relation conv (TransformerConv + SAGE)
+│   ├── atomic_routes.py                       # Schema → atomic routes (dim-dim, dim-fact-dim)
+│   ├── trainer.py                             # Train / eval / embedding extraction loop
+│   ├── runner.py                              # Multi-seed ExperimentRunner
+│   ├── baseline_evaluator.py                  # Global-popularity & past-visit baselines
+│   ├── logging_utils.py                       # File + stdout logger
+│   ├── config.py                              # Shared paths & split timestamps
 │   └── utils.py
-├── scripts/                              # Entry points
-│   ├── analyze_split.ipynb               # Pick train/val/test timestamps
-│   ├── mention_link_prediction.py        # Run user-mention variant
-│   ├── mention_link_prediction_with_reply.py  # Run user-mention + reply variant
-│   └── run_baselines.py                  # Run popularity / past-visit baselines
-├── analysis/                             # Post-hoc analysis notebooks
-│   ├── across_community_analysis.ipynb
-│   ├── mention_behavior_analysis.ipynb
-│   └── permutation_analaysis.ipynb
+├── scripts/                                   # Entry points
+│   ├── analyze_split.ipynb                    # Pick train/val/test timestamps
+│   ├── mention_link_prediction.py             # Run user-mention variant
+│   └── run_baselines.py                       # Run popularity / past-visit baselines
 ├── doc/
-│   ├── preprocessed_schema.md            # Table schemas & ER diagram
-│   └── tweet_mention_link_prediction_output_manual.md  # Output file reference
-├── data/                                 # Input parquet files
-└── results/                              # Model outputs 
+│   └── preprocessed_schema.md                 # Table schemas & ER diagram
+├── data/                                      # Input parquet files
+└── results/                                   # Model outputs
 ```
 
 ## Data
 
-Expected files in `./data/` (see `doc/preprocessed_schema.md` for full schemas):
+The pipeline expects the following parquet files in `./data/`:
 
-- `users_2019.parquet` — user dimension table with `verified`, `actor_type`, and a 384-dim SentenceTransformer `description_embedding`.
-- `tweets_2019.parquet` — tweet fact table with `text_embedding`, engagement counts, sentiment/emotion/topic/theme categoricals, and 11 binary emotion flags.
-- `mention_rel.parquet` — bridge table linking tweets to mentioned users.
-- `replies_2019.parquet`, `reply_mention_rel.parquet` — only needed for the reply variant.
+| File | Description |
+|---|---|
+| `users_2019.parquet` | User attributes (verified flag, description embedding, …) |
+| `tweets_2019.parquet` | Tweets with timestamps, topics, emotions, text embeddings |
+| `mention_rel.parquet` | Tweet → mentioned-user edges |
+| `replies_2019.parquet` | Reply tweets (optional, used by the +reply variant) |
+| `reply_mention_rel.parquet` | Reply → mentioned-user edges (optional) |
 
-Temporal split (set in `src/dataset.py` and `src/config.py`):
+Splits are temporal:
 
-- **Train:** before `2019-09-01` (~70% of tweets, ~64% of mentions)
-- **Val:** `2019-09-01` – `2019-11-01` (~15%)
-- **Test:** from `2019-11-01` (~15%)
+- **Train**: everything before `2019-09-01`
+- **Validation**: `2019-09-01` → `2019-11-01`
+- **Test**: `2019-11-01` onwards
+
+The 30-day prediction window and split timestamps are defined in `dataset.py` and `task.py`.
 
 ## Installation
 
@@ -64,54 +70,72 @@ Temporal split (set in `src/dataset.py` and `src/config.py`):
 pip install torch torch-geometric torch-frame relbench pandas numpy tqdm
 ```
 
-The code was developed against PyTorch 2.x with CUDA. A GPU is strongly recommended.
+A CUDA-capable GPU is strongly recommended — neighbor sampling and attention over the full mention graph are expensive on CPU.
 
-## Usage
+## Running the GNN experiment
 
-**1. Choose split timestamps** — open `scripts/analyze_split.ipynb` to inspect tweet/mention density over time and confirm the quantile-based split.
-
-**2. Train the GNN** — each script is self-contained with its own `CONFIG` dict at the top:
+Two entry points are provided:
 
 ```bash
-python scripts/mention_link_prediction.py
-python scripts/mention_link_prediction_with_reply.py
+cd scripts
+python mention_link_prediction.py             # users + tweets + mentions
+python mention_link_prediction_with_reply.py  # adds replies + reply_mention_rel
 ```
 
-Default hyperparameters: lr `1e-3`, 20 epochs, batch size 512, 128 channels, `[128, 128, 128]` neighbor sampling, 5 seeds (`[42, 123, 456, 789, 1024]`).
+This runs five seeds (42, 123, 456, 789, 1024) with the configuration block at the top of the script. For each run it saves:
 
-**3. Run baselines**:
+- `last_epoch_model.pt`, `best_map_model.pt` — model checkpoints
+- `*_val_pred.npy`, `*_test_pred.npy` — top-*k* predictions
+- `results.json` — per-run and aggregated metrics (precision, recall, MAP @ k=10)
+- `experiment_<timestamp>.log` — full training log
+
+Key hyperparameters (edit `CONFIG` in the script):
+
+| Key | Default | Notes |
+|---|---|---|
+| `is_relgnn` | `True` | Set `False` to fall back to HeteroGraphSAGE |
+| `num_heads` | `1` | Attention/prediction heads in RelGNN |
+| `num_layers` | `4` | GNN depth |
+| `num_neighbors` | `[128, 128, 128, 128]` | Per-layer neighbor sampling fan-out |
+| `channels` | `128` | Hidden dimension |
+| `epochs` | `20` | |
+| `batch_size` | `512` | |
+| `lr` | `0.001` | |
+| `eval_k` | `10` | Top-k for precision / recall / MAP |
+| `timedelta_days` | `30` | Prediction horizon |
+
+## Running the baselines
 
 ```bash
-python scripts/run_baselines.py
+cd scripts
+python run_baselines.py
 ```
 
-This evaluates two non-learned baselines:
-- **Global popularity** — always predict the top-*k* most-mentioned users.
-- **Past visit** — for each source user, predict users they mentioned most frequently before the evaluation timestamp, padded with globally popular users.
+Outputs `baseline_metrics.json` plus `.npy` prediction arrays for both baselines on val and test.
 
-## Outputs
+## Metrics
 
-Each run writes to the configured `output_dir` (e.g. `results/user_mention_link_prediction/`):
+All evaluation uses RelBench's link-prediction metrics at *k* = 10:
 
-- `results.json` — aggregated metrics across seeds
-- `run_{1..5}/{model_state_dict.pt, val_pred.npy, test_pred.npy}` — per-seed artifacts
-- `user_embeddings.npy` / `user_ids.npy`, `tweet_embeddings.npy` / `tweet_ids.npy` — 128-dim GNN embeddings with companion ID arrays
-- `user_metadata.parquet`, `tweet_metadata.parquet` — join keys for embeddings
-- `baselines/` — popularity and past-visit predictions + metrics
+- `link_prediction_precision`
+- `link_prediction_recall`
+- `link_prediction_map`
 
-Prediction arrays have shape `[N_samples, 10]` and are row-aligned with `task._get_table(split).df`. See `doc/tweet_mention_link_prediction_output_manual.md` for full recipes on mapping predictions and embeddings back to the original tweets and users.
+The runner reports both the **last-epoch** model and the model that achieved the **best validation MAP**, aggregated as mean ± std over the five seeds.
 
-## Analysis notebooks
+## How the graph is built
 
-- **`across_community_analysis.ipynb`** — breaks down model performance across Leiden-detected user communities.
-- **`mention_behavior_analysis.ipynb`** — examines per-user mention patterns and how they relate to prediction accuracy.
-- **`permutation_analaysis.ipynb`** — compares metrics on original vs. feature-permuted runs to quantify the contribution of node features.
+1. `TweetMentionDataset.make_db()` wraps the parquet tables as `relbench.base.Table` objects with PK/FK declarations.
+2. `make_pkey_fkey_graph` (RelBench) materializes a `HeteroData` graph plus column-type stats.
+3. `get_atomic_routes` walks the edge types and produces:
+   - **dim-dim** routes for direct PK/FK joins,
+   - **dim-fact-dim** routes whenever a fact table (`f2p_*` edges) connects two dimensions through a shared key.
+4. `RelGNN_HeteroConv` dispatches each route to a `RelGNNConv`, which uses `TransformerConv` for attention and `SAGEConv` to aggregate the fact-side representation in the dim-fact-dim case.
 
-All three notebooks read from `src/config.py`, which defines `RESULT_DIRS` for the `{original, permuted} × {tweet_mention, user_mention, user_mention_reply}` conditions and guards missing directories via `available_result_dirs()`.
+## Citation
 
-## Key design notes
+FEY, Matthias, et al. Relational deep learning: Graph representation learning on relational databases. arXiv preprint arXiv:2312.04615, 2023.
 
-- **RelBench integration** — `TweetMentionDatasetBase` and `UserMentionTaskBase` subclass RelBench's `Dataset` and `RecommendationTask` so the pipeline reuses RelBench's temporal sampling, graph materialization, and link-prediction metrics.
-- **Feature encoding** — categorical, numerical, and 384-dim text/description embeddings are all handled by `torch_frame` stypes; see `build_col_to_stype_dict` in each script.
-- **Model** — `HeteroEncoder` + `HeteroTemporalEncoder` + `HeteroGraphSAGE` + shallow per-node-type embeddings + ID-aware MLP head (`src/model.py`).
-- **Reproducibility** — `ExperimentRunner` trains with 5 fixed seeds and aggregates metrics; caches are cleared at the start of each run.
+ROBINSON, Joshua, et al. Relbench: A benchmark for deep learning on relational databases. Advances in Neural Information Processing Systems, 2024, 37: 21330-21341.
+
+CHEN, Tianlang; KANATSOULIS, Charilaos; LESKOVEC, Jure. Relgnn: Composite message passing for relational deep learning. arXiv preprint arXiv:2502.06784, 2025.
