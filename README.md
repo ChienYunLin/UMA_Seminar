@@ -1,6 +1,6 @@
 # User Mention Link Prediction with Relational GNNs
 
-Predicting which users a Twitter user will mention next, framed as a temporal link prediction task on a heterogeneous relational graph. Built on top of [RelBench](https://relbench.stanford.edu/) and [PyTorch Geometric](https://pyg.org/), with a [RelGNN](https://arxiv.org/abs/2502.19406)-style attention architecture and heuristic baselines for comparison.
+Predicting which users a Twitter user will mention next, framed as a temporal link prediction task on a heterogeneous relational graph. Built on top of [RelBench](https://relbench.stanford.edu/) and [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/), with a [RelGNN](https://github.com/snap-stanford/RelGNN)-style attention architecture and heuristic baselines for comparison.
 
 ## Overview
 
